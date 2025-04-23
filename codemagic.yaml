@@ -8,8 +8,8 @@ workflows:
         - code-signing
       vars:
         BUNDLE_ID: "com.denice.agent.ai"
-        XCODE_SCHEME: "AgentAiMac"
-        XCODE_PROJECT: "AgentAiMac.xcodeproj"
+        XCODE_SCHEME: "AiAssistant"
+        XCODE_PROJECT: "AiAssistant.xcodeproj"
       xcode: latest
     scripts:
       - name: Install Codemagic CLI tools
