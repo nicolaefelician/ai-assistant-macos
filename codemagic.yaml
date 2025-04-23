@@ -21,74 +21,45 @@ workflows:
       - name: Install CocoaPods dependencies
         script: pod install
 
-      - name: Set up keychain for code signing
-        script: |
-          keychain initialize
-          echo "🔐 Initialized keychain."
-
-      - name: Fetch signing files for .app signing
-        script: |
+      - name: Set up keychain to be used for code signing using Codemagic CLI 'keychain' command
+        script: keychain initialize
+      - name: Fetch signing files
+        script: | 
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --platform MAC_OS \
             --type MAC_APP_STORE \
-            --create || true
-
-      # - name: Ensure Mac Installer Distribution certificate is available
-      #   script: |
-      #     app-store-connect certificates list --type MAC_INSTALLER_DISTRIBUTION --save || \
-      #     app-store-connect certificates create --type MAC_INSTALLER_DISTRIBUTION --save
-
-      - name: Import Developer ID Application certificate and key
-        script: |
-          echo "$MAC_CERT_CRT" > dev_id_app.crt
-          echo "$MAC_CERT_KEY" > dev_id_app.key
-          openssl pkcs12 -export \
-            -inkey dev_id_app.key \
-            -in dev_id_app.crt \
-            -out dev_id_app.p12 \
-            -passout pass:denice123
-          security import dev_id_app.p12 -k "$(keychain list-keychains | head -1 | tr -d '"')" -P denice123 -T /usr/bin/codesign
-
-      - name: Import Developer ID Installer certificate and key
-        script: |
-          echo "$INSTALLER_CERT_CRT" > dev_id_inst.crt
-          echo "$INSTALLER_CERT_KEY" > dev_id_inst.key
-          openssl pkcs12 -export \
-            -inkey dev_id_inst.key \
-            -in dev_id_inst.crt \
-            -out dev_id_inst.p12 \
-            -passout pass:denice123
-          security import dev_id_inst.p12 -k "$(keychain list-keychains | head -1 | tr -d '"')" -P denice123 -T /usr/bin/codesign
-
+            --create
+      - name: Fetch Mac Installer Distribution certificates
+        script: |  
+            app-store-connect certificates list --type MAC_APP_DISTRIBUTION --save || \
+            app-store-connect certificates create --type MAC_APP_DISTRIBUTION --save
+      - name: Set up signing certificate
+        script: keychain add-certificates
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
 
-      - name: Build .app using Xcode workspace
-        script: |
-          xcodebuild \
-            -workspace "$XCODE_WORKSPACE" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -derivedDataPath build \
-            clean build
-
-      - name: Create signed .pkg installer
-        script: |
-          set -xe
-
-          APP_NAME=$(find build -name "*.app" | head -n 1)
-          if [ ! -d "$APP_NAME" ]; then
-            echo "❌ ERROR: .app not found at expected location"
-            exit 1
-          fi
-
+      - name: Package application
+        script: | 
+          set -x
+        
+          # Command to find the path to your generated app, may be different
+          APP_NAME=$(find $(pwd) -name "*.app")  
+          cd $(dirname "$APP_NAME")
+        
           PACKAGE_NAME=$(basename "$APP_NAME" .app).pkg
-          xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg
+          xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg  # Create and unsigned package
 
-          INSTALLER_CERT_NAME="Developer ID Installer: Angelle Denice (K9MTJ7767Q)"
-          echo "✅ Using certificate: $INSTALLER_CERT_NAME"
-          xcrun productsign --sign "$INSTALLER_CERT_NAME" unsigned.pkg "$PACKAGE_NAME"
-          rm -f unsigned.pkg
+          # Find the installer certificate common name in keychain
+          INSTALLER_CERT_NAME=$(keychain list-certificates \
+            | jq '.[]
+            | select(.common_name
+            | contains("Mac Developer Installer"))
+            | .common_name' \
+            | xargs)
+          
+          xcrun productsign --sign "$INSTALLER_CERT_NAME" unsigned.pkg "$PACKAGE_NAME" # Sign the package
+        
+          rm -f unsigned.pkg               
 
       - name: Notarize the .pkg installer
         script: |
