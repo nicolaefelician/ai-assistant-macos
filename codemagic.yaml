@@ -9,9 +9,8 @@ workflows:
         - code-signing
       vars:
         BUNDLE_ID: "com.denice.agent.ai"
-        XCODE_WORKSPACE: "AiAssistant.xcworkspace"
         XCODE_SCHEME: "AiAssistant"
-        XCODE_PROJECT: "AiAssistant.xcodeproj"
+        XCODE_WORKSPACE: "AiAssistant.xcworkspace"
       xcode: latest
       cocoapods: default
 
@@ -19,15 +18,11 @@ workflows:
       app_store_connect: Denice-CI-CD-Key
 
     scripts:
-      - name: Install Codemagic CLI tools
-        script: pip3 install codemagic-cli-tools
-
       - name: Install CocoaPods dependencies
         script: |
-          gem install cocoapods # optional if not cached
           pod install
 
-      - name: Set up keychain to be used for code signing
+      - name: Set up keychain for code signing
         script: keychain initialize
 
       - name: Fetch signing files
@@ -45,13 +40,13 @@ workflows:
       - name: Add certificates to keychain
         script: keychain add-certificates
 
-      - name: Set up code signing settings
+      - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
 
-      - name: Build .app for macOS
+      - name: Build .app using Xcode workspace
         script: |
           xcodebuild \
-            -project "$XCODE_PROJECT" \
+            -workspace "$XCODE_WORKSPACE" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -derivedDataPath build \
