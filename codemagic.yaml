@@ -42,25 +42,36 @@ workflows:
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
 
+      - name: Build .app using Xcode workspace
+        script: |
+          xcodebuild \
+            -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -derivedDataPath build \
+            clean build
+
+          APP_NAME=$(find build -name "*.app" | head -n 1)
+          if [ -z "$APP_NAME" ]; then
+            echo "❌ ERROR: .app file not found after build"
+            exit 1
+          fi
+
       - name: Package application
         script: |
           set -x
 
-          APP_NAME=$(find $(pwd) -name "*.app")
-          cd $(dirname "$APP_NAME")
+          APP_NAME=$(find build -name "*.app" | head -n 1)
+          if [ ! -d "$APP_NAME" ]; then
+            echo "❌ ERROR: .app not found at expected location"
+            exit 1
+          fi
 
           PACKAGE_NAME=$(basename "$APP_NAME" .app).pkg
           xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg
 
-          INSTALLER_CERT_NAME=$(keychain list-certificates \
-            | jq '.[].common_name' \
-            | grep -i "developer id installer" \
-            | head -n 1)
-
-          if [ -z "$INSTALLER_CERT_NAME" ]; then
-            echo "❌ ERROR: Could not find 'Developer ID Installer' certificate"
-            exit 1
-          fi
+          # ✅ Hardcoded trusted certificate name
+          INSTALLER_CERT_NAME="Developer ID Installer: Angelle Denice (K9MTJ7767Q)"
 
           echo "✅ Using certificate: $INSTALLER_CERT_NAME"
           xcrun productsign --sign "$INSTALLER_CERT_NAME" unsigned.pkg "$PACKAGE_NAME"
