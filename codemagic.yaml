@@ -39,22 +39,6 @@ workflows:
       - name: Set up signing certificate
         script: keychain add-certificates
 
-      - name: Import Developer ID Installer certificate and key
-        script: |
-          echo "$INSTALLER_CERT_CRT" > dev_id_inst.crt
-          echo "$INSTALLER_CERT_KEY" > dev_id_inst.key
-
-          openssl pkcs12 -export \
-            -inkey dev_id_inst.key \
-            -in dev_id_inst.crt \
-            -out dev_id_inst.p12 \
-            -passout pass:denice123
-
-          security import dev_id_inst.p12 \
-            -k /Users/builder/Library/codemagic-cli-tools/keychains/default.keychain-db \
-            -P denice123 \
-            -T /usr/bin/codesign
-
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
 
