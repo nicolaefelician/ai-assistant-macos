@@ -68,12 +68,14 @@ workflows:
 
       - name: Notarize the .pkg installer
         script: |
-          PKG_FILE=$(find . -name "*.pkg")
+          PKG_FILE=$(find . -name "*.pkg" | head -n 1)
           xcrun notarytool submit "$PKG_FILE" \
             --apple-id "$APPLE_ID" \
             --team-id "$TEAM_ID" \
             --password "$APPLE_ID_PASSWORD" \
-            --wait
+            --wait \
+            --type osx \
+            --force
 
     artifacts:
       - build/**/*.app
