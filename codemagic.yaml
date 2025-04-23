@@ -19,28 +19,29 @@ workflows:
 
     scripts:
       - name: Install CocoaPods dependencies
-        script: |
-          pod install
+        script: pod install
 
       - name: Set up keychain for code signing
         script: |
           keychain initialize
+          echo "🔐 Initialized keychain."
 
-      - name: Fetch signing files
+      - name: Fetch signing files for .app signing
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --platform MAC_OS \
             --type MAC_APP_STORE \
-            --create
+            --create || true
 
-      - name: Fetch Mac Installer Distribution certificates
+      - name: Ensure Mac Installer Distribution certificate is available
         script: |
-          app-store-connect certificates list --type MAC_APP_DISTRIBUTION --save || \
-          app-store-connect certificates create --type MAC_APP_DISTRIBUTION --save
+          app-store-connect certificates list --type MAC_INSTALLER_DISTRIBUTION --save || \
+          app-store-connect certificates create --type MAC_INSTALLER_DISTRIBUTION --save
 
-      - name: Add certificates to keychain
+      - name: Add all certificates to keychain
         script: |
           keychain add-certificates
+          echo "✅ Available certificates:"
           keychain list-certificates | jq '.[] | .common_name'
 
       - name: Set up code signing settings on Xcode project
@@ -84,6 +85,11 @@ workflows:
       - name: Notarize the .pkg installer
         script: |
           PKG_FILE=$(find . -name "*.pkg" | head -n 1)
+          if [ -z "$PKG_FILE" ]; then
+            echo "❌ ERROR: .pkg file not found"
+            exit 1
+          fi
+
           xcrun notarytool submit "$PKG_FILE" \
             --apple-id "$APPLE_ID" \
             --team-id "$TEAM_ID" \
