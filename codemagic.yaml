@@ -46,8 +46,8 @@ workflows:
             -inkey dev_id_app.key \
             -in dev_id_app.crt \
             -out dev_id_app.p12 \
-            -passout pass:devapp
-          keychain import-certificate dev_id_app.p12 --password devapp
+            -passout pass:denice123
+          security import dev_id_app.p12 -k "$(keychain list-keychains | head -1 | tr -d '"')" -P denice123 -T /usr/bin/codesign
 
       - name: Import Developer ID Installer certificate and key
         script: |
@@ -57,8 +57,8 @@ workflows:
             -inkey dev_id_inst.key \
             -in dev_id_inst.crt \
             -out dev_id_inst.p12 \
-            -passout pass:devinst
-          keychain import-certificate dev_id_inst.p12 --password devinst
+            -passout pass:denice123
+          security import dev_id_inst.p12 -k "$(keychain list-keychains | head -1 | tr -d '"')" -P denice123 -T /usr/bin/codesign
 
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
