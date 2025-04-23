@@ -35,14 +35,6 @@ workflows:
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
 
-      - name: Build macOS .app
-        script: |
-          xcode-project build-mac-app \
-            --project "$XCODE_PROJECT" \
-            --scheme "$XCODE_SCHEME" \
-            --archive \
-            --signing-identity "Developer ID Application: Angelle Denice"
-
       - name: Create signed .pkg installer
         script: |
           set -x
