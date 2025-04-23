@@ -12,7 +12,8 @@ workflows:
         XCODE_PROJECT: "AiAssistant.xcodeproj"
       xcode: latest
     integrations:
-        app_store_connect: Denice-CI-CD-Key
+      app_store_connect: Denice-CI-CD-Key
+
     scripts:
       - name: Install Codemagic CLI tools
         script: pip3 install codemagic-cli-tools
@@ -20,8 +21,14 @@ workflows:
       - name: Initialize keychain
         script: keychain initialize
 
-      - name: Import certificates
-        script: keychain add-certificates
+      - name: Decode certificate from base64
+        script: echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
+
+      - name: Import certificate to keychain
+        script: |
+          keychain add-certificates \
+            --certificate certificate.p12 \
+            --certificate-password "$CERTIFICATE_PASSWORD"
 
       - name: Set up provisioning
         script: xcode-project use-profiles
