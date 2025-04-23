@@ -54,8 +54,14 @@ workflows:
 
       - name: Create signed .pkg installer
         script: |
-          set -x
+          set -xe
+
           APP_NAME=$(find build -name "*.app" | head -n 1)
+          if [ ! -d "$APP_NAME" ]; then
+            echo "❌ ERROR: .app not found at expected location"
+            exit 1
+          fi
+
           PACKAGE_NAME=$(basename "$APP_NAME" .app).pkg
           xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg
 
@@ -63,6 +69,12 @@ workflows:
             | select(.common_name | contains("Developer ID Installer")) 
             | .common_name' | xargs)
 
+          if [ -z "$INSTALLER_CERT_NAME" ]; then
+            echo "❌ ERROR: Could not find 'Developer ID Installer' certificate"
+            exit 1
+          fi
+
+          echo "✅ Using certificate: $INSTALLER_CERT_NAME"
           xcrun productsign --sign "$INSTALLER_CERT_NAME" unsigned.pkg "$PACKAGE_NAME"
           rm -f unsigned.pkg
 
@@ -74,7 +86,6 @@ workflows:
             --team-id "$TEAM_ID" \
             --password "$APPLE_ID_PASSWORD" \
             --wait \
-            --type osx \
             --force
 
     artifacts:
