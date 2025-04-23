@@ -23,43 +23,48 @@ workflows:
 
       - name: Set up keychain to be used for code signing using Codemagic CLI 'keychain' command
         script: keychain initialize
+
       - name: Fetch signing files
-        script: | 
+        script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --platform MAC_OS \
             --type MAC_APP_STORE \
             --create
+
       - name: Fetch Mac Installer Distribution certificates
-        script: |  
-            app-store-connect certificates list --type MAC_APP_DISTRIBUTION --save || \
-            app-store-connect certificates create --type MAC_APP_DISTRIBUTION --save
+        script: |
+          app-store-connect certificates list --type MAC_APP_DISTRIBUTION --save || \
+          app-store-connect certificates create --type MAC_APP_DISTRIBUTION --save
+
       - name: Set up signing certificate
         script: keychain add-certificates
+
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
 
       - name: Package application
-        script: | 
+        script: |
           set -x
-        
-          # Command to find the path to your generated app, may be different
-          APP_NAME=$(find $(pwd) -name "*.app")  
-          cd $(dirname "$APP_NAME")
-        
-          PACKAGE_NAME=$(basename "$APP_NAME" .app).pkg
-          xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg  # Create and unsigned package
 
-          # Find the installer certificate common name in keychain
+          APP_NAME=$(find $(pwd) -name "*.app")
+          cd $(dirname "$APP_NAME")
+
+          PACKAGE_NAME=$(basename "$APP_NAME" .app).pkg
+          xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg
+
           INSTALLER_CERT_NAME=$(keychain list-certificates \
-            | jq '.[]
-            | select(.common_name
-            | contains("Mac Developer Installer"))
-            | .common_name' \
-            | xargs)
-          
-          xcrun productsign --sign "$INSTALLER_CERT_NAME" unsigned.pkg "$PACKAGE_NAME" # Sign the package
-        
-          rm -f unsigned.pkg               
+            | jq '.[].common_name' \
+            | grep -i "developer id installer" \
+            | head -n 1)
+
+          if [ -z "$INSTALLER_CERT_NAME" ]; then
+            echo "❌ ERROR: Could not find 'Developer ID Installer' certificate"
+            exit 1
+          fi
+
+          echo "✅ Using certificate: $INSTALLER_CERT_NAME"
+          xcrun productsign --sign "$INSTALLER_CERT_NAME" unsigned.pkg "$PACKAGE_NAME"
+          rm -f unsigned.pkg
 
       - name: Notarize the .pkg installer
         script: |
