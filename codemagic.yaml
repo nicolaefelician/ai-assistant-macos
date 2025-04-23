@@ -19,16 +19,13 @@ workflows:
         script: pip3 install codemagic-cli-tools
 
       - name: Initialize keychain
-        script: keychain initialize
+        script: |
+          keychain initialize
+          keychain add-certificates
+          xcode-project use-profiles
 
       - name: Decode certificate from base64
         script: echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
-
-      - name: Import certificate to keychain
-        script: |
-          keychain add-certificates \
-            --certificate certificate.p12 \
-            --certificate-password "$CERTIFICATE_PASSWORD"
 
       - name: Set up provisioning
         script: xcode-project use-profiles
