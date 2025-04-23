@@ -1,0 +1,74 @@
+workflows:
+  macos-distribution:
+    name: macOS Distribution
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      groups:
+        - code-signing
+      vars:
+        BUNDLE_ID: "com.denice.agent.ai"
+        XCODE_SCHEME: "AgentAiMac"
+        XCODE_PROJECT: "AgentAiMac.xcodeproj"
+      xcode: latest
+    scripts:
+      - name: Install Codemagic CLI tools
+        script: pip3 install codemagic-cli-tools
+
+      - name: Initialize keychain
+        script: keychain initialize
+
+      - name: Import certificates
+        script: keychain add-certificates
+
+      - name: Set up provisioning
+        script: xcode-project use-profiles
+
+      - name: Build macOS .app
+        script: |
+          xcode-project build-mac-app \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --archive \
+            --signing-identity "Developer ID Application: Angelle Denice"
+
+      - name: Create signed .pkg installer
+        script: |
+          set -x
+          APP_NAME=$(find $(pwd) -name "*.app")
+          cd $(dirname "$APP_NAME")
+          PACKAGE_NAME=$(basename "$APP_NAME" .app).pkg
+          xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg
+
+          INSTALLER_CERT_NAME=$(keychain list-certificates \
+            | jq '.[]
+            | select(.common_name
+            | contains("Developer ID Installer")) 
+            | .common_name' \
+            | xargs)
+
+          xcrun productsign --sign "$INSTALLER_CERT_NAME" unsigned.pkg "$PACKAGE_NAME"
+          rm -f unsigned.pkg
+
+      - name: Notarize the .pkg installer
+        script: |
+          PKG_FILE=$(find . -name "*.pkg")
+          xcrun altool --notarize-app \
+            --primary-bundle-id "$BUNDLE_ID" \
+            --username "$APPLE_ID" \
+            --password "$APPLE_ID_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --file "$PKG_FILE"
+
+    artifacts:
+      - build/macos/Build/Products/Release/*.app
+      - build/macos/Build/Products/Release/*.pkg
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      email:
+        recipients:
+          - esmondandersonhaldegallagher@gmail.com
+        notify:
+          success: true
+          failure: true
