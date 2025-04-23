@@ -1,6 +1,6 @@
 workflows:
-  macos-distribution:
-    name: macOS Distribution
+  macos-sign-notarize-app:
+    name: macOS Sign & Notarize .app Only
     max_build_duration: 60
     instance_type: mac_mini_m2
 
@@ -21,28 +21,23 @@ workflows:
       - name: Install CocoaPods dependencies
         script: pod install
 
-      - name: Set up keychain to be used for code signing using Codemagic CLI 'keychain' command
+      - name: Set up keychain for signing
         script: keychain initialize
 
-      - name: Fetch signing files
+      - name: Fetch Developer ID Application signing files
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --platform MAC_OS \
-            --type MAC_APP_STORE \
+            --type DEVELOPER_ID_APPLICATION \
             --create
 
-      - name: Fetch Mac Installer Distribution certificates
-        script: |
-          app-store-connect certificates list --type MAC_APP_DISTRIBUTION --save || \
-          app-store-connect certificates create --type MAC_APP_DISTRIBUTION --save
-
-      - name: Set up signing certificate
+      - name: Add certificates to keychain
         script: keychain add-certificates
 
-      - name: Set up code signing settings on Xcode project
+      - name: Set up code signing in Xcode
         script: xcode-project use-profiles
 
-      - name: Build .app using Xcode workspace
+      - name: Build the .app using Xcode
         script: |
           xcodebuild \
             -workspace "$XCODE_WORKSPACE" \
@@ -51,52 +46,37 @@ workflows:
             -derivedDataPath build \
             clean build
 
-      - name: Package application
+      - name: Sign and notarize .app bundle
         script: |
-          set -xe
-
-          APP_NAME=$(find $(pwd) -name "*.app" | head -n 1)
-          if [ -z "$APP_NAME" ]; then
-            echo "❌ ERROR: .app not found at expected location"
+          APP_PATH=$(find build -name "*.app" | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "❌ ERROR: .app not found"
             exit 1
           fi
 
-          PACKAGE_NAME=$(basename "$APP_NAME" .app).pkg
-          xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg
+          echo "✅ Found app: $APP_PATH"
+          
+          # Sign the .app
+          codesign --deep --force --verbose --options runtime \
+            --sign "Developer ID Application: Angelle Denice (K9MTJ7767Q)" \
+            "$APP_PATH"
 
-          INSTALLER_CERT_NAME=$(keychain list-certificates \
-            | jq '.[].common_name' \
-            | grep -i "developer id installer" \
-            | head -n 1)
+          # Zip the app (required for notarization)
+          ditto -c -k --keepParent "$APP_PATH" signed_app.zip
 
-          if [ -z "$INSTALLER_CERT_NAME" ]; then
-            echo "❌ ERROR: Could not find 'Developer ID Installer' certificate"
-            exit 1
-          fi
-
-          echo "✅ Using certificate: $INSTALLER_CERT_NAME"
-          xcrun productsign --sign "$INSTALLER_CERT_NAME" unsigned.pkg "$PACKAGE_NAME"
-          rm -f unsigned.pkg
-
-      - name: Notarize the .pkg installer
-        script: |
-          PKG_FILE=$(find . -name "*.pkg" | head -n 1)
-          if [ -z "$PKG_FILE" ]; then
-            echo "❌ ERROR: .pkg file not found"
-            exit 1
-          fi
-
-          xcrun notarytool submit "$PKG_FILE" \
+          # Submit to notarization
+          xcrun notarytool submit signed_app.zip \
             --apple-id "$APPLE_ID" \
             --team-id "$TEAM_ID" \
             --password "$APPLE_ID_PASSWORD" \
             --wait \
-            --force
+            --verbose
+
+          echo "✅ Notarization submitted"
 
     artifacts:
       - build/**/*.app
-      - build/**/*.pkg
-      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+      - signed_app.zip
 
     publishing:
       email:
