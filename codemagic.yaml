@@ -18,27 +18,30 @@ workflows:
       - name: Install Codemagic CLI tools
         script: pip3 install codemagic-cli-tools
 
-      - name: Set up keychain to be used for code signing using Codemagic CLI 'keychain' command
+      - name: Initialize keychain
         script: keychain initialize
-      - name: Fetch signing files
-        script: | 
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --platform MAC_OS \
-            --type MAC_APP_STORE \
-            --create
-      - name: Fetch Mac Installer Distribution certificates
-        script: |  
-            app-store-connect certificates list --type MAC_APP_DISTRIBUTION --save || \
-            app-store-connect certificates create --type MAC_APP_DISTRIBUTION --save
-      - name: Set up signing certificate
-        script: keychain add-certificates
-      - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles
+
+      - name: Decode certificate from base64
+        script: echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
+
+      - name: Import certificate to keychain
+        script: |
+          keychain add-certificates \
+            --certificate certificate.p12 \
+            --certificate-password "$CERTIFICATE_PASSWORD"
+
+      - name: Build macOS .app
+        script: |
+          xcodebuild \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -derivedDataPath build
 
       - name: Create signed .pkg installer
         script: |
           set -x
-          APP_NAME=$(find $(pwd) -name "*.app")
+          APP_NAME=$(find build -name "*.app")
           cd $(dirname "$APP_NAME")
           PACKAGE_NAME=$(basename "$APP_NAME" .app).pkg
           xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg
@@ -56,16 +59,19 @@ workflows:
       - name: Notarize the .pkg installer
         script: |
           PKG_FILE=$(find . -name "*.pkg")
-          xcrun altool --notarize-app \
-            --primary-bundle-id "$BUNDLE_ID" \
-            --username "$APPLE_ID" \
+          xcrun notarytool submit "$PKG_FILE" \
+            --apple-id "$APPLE_ID" \
             --password "$APPLE_ID_PASSWORD" \
             --team-id "$TEAM_ID" \
-            --file "$PKG_FILE"
+            --wait
+
+      - name: Staple notarization ticket
+        script: |
+          PKG_FILE=$(find . -name "*.pkg")
+          xcrun stapler staple "$PKG_FILE"
 
     artifacts:
-      - build/macos/Build/Products/Release/*.app
-      - build/macos/Build/Products/Release/*.pkg
+      - build/Build/Products/Release/*.pkg
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
     publishing:
