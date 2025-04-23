@@ -26,9 +26,7 @@ workflows:
 
       - name: Import certificate to keychain
         script: |
-          keychain add-certificates \
-            --certificate certificate.p12 \
-            --certificate-password "$CERTIFICATE_PASSWORD"
+          keychain add-certificates
 
       - name: Build macOS .app
         script: |
