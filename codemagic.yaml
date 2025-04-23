@@ -21,26 +21,27 @@ workflows:
       - name: Install CocoaPods dependencies
         script: pod install
 
-      - name: Set up keychain to be used for code signing using Codemagic CLI 'keychain' command
+      - name: Set up keychain for code signing
         script: keychain initialize
 
-      - name: Fetch signing files
+      - name: Install Apple Intermediate Certificate
         script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --platform MAC_OS \
-            --type MAC_APP_STORE \
-            --create
+          echo "$APPLE_INT_CERT_PEM" > intermediate.cer
+          sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain intermediate.cer
 
-      - name: Fetch Mac Installer Distribution certificates
+      - name: Import Developer ID Installer certificate and key
         script: |
-          app-store-connect certificates list --type MAC_APP_DISTRIBUTION --save || \
-          app-store-connect certificates create --type MAC_APP_DISTRIBUTION --save
+          echo "$INSTALLER_CERT_CRT" > installer.crt
+          echo "$INSTALLER_CERT_KEY" > installer.key
+          openssl pkcs12 -export \
+            -inkey installer.key \
+            -in installer.crt \
+            -out installer.p12 \
+            -passout pass:denice123
+          security import installer.p12 -k "$(security list-keychains | head -1 | tr -d '"')" -P denice123 -T /usr/bin/codesign
 
       - name: Set up signing certificate
         script: keychain add-certificates
-
-      - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles
 
       - name: Build .app using Xcode workspace
         script: |
@@ -51,28 +52,19 @@ workflows:
             -derivedDataPath build \
             clean build
 
-          APP_NAME=$(find build -name "*.app" | head -n 1)
-          if [ -z "$APP_NAME" ]; then
-            echo "❌ ERROR: .app file not found after build"
-            exit 1
-          fi
-
       - name: Package application
         script: |
           set -x
-
           APP_NAME=$(find build -name "*.app" | head -n 1)
           if [ ! -d "$APP_NAME" ]; then
-            echo "❌ ERROR: .app not found at expected location"
+            echo "❌ ERROR: .app not found"
             exit 1
           fi
 
           PACKAGE_NAME=$(basename "$APP_NAME" .app).pkg
           xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg
 
-          # ✅ Hardcoded trusted certificate name
           INSTALLER_CERT_NAME="Developer ID Installer: Angelle Denice (K9MTJ7767Q)"
-
           echo "✅ Using certificate: $INSTALLER_CERT_NAME"
           xcrun productsign --sign "$INSTALLER_CERT_NAME" unsigned.pkg "$PACKAGE_NAME"
           rm -f unsigned.pkg
