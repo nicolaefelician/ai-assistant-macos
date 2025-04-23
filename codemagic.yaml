@@ -23,7 +23,9 @@ workflows:
           pod install
 
       - name: Set up keychain for code signing
-        script: keychain initialize
+        script: |
+          keychain initialize
+          keychain list-certificates | jq '.[] | .common_name'
 
       - name: Fetch signing files
         script: |
