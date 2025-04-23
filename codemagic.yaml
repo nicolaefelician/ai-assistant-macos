@@ -38,11 +38,27 @@ workflows:
           app-store-connect certificates list --type MAC_INSTALLER_DISTRIBUTION --save || \
           app-store-connect certificates create --type MAC_INSTALLER_DISTRIBUTION --save
 
-      - name: Add all certificates to keychain
+      - name: Import Developer ID Application certificate and key
         script: |
-          keychain add-certificates
-          echo "✅ Available certificates:"
-          keychain list-certificates | jq '.[] | .common_name'
+          echo "$MAC_CERT_CRT" > dev_id_app.crt
+          echo "$MAC_CERT_KEY" > dev_id_app.key
+          openssl pkcs12 -export \
+            -inkey dev_id_app.key \
+            -in dev_id_app.crt \
+            -out dev_id_app.p12 \
+            -passout pass:devapp
+          keychain import-certificate dev_id_app.p12 --password devapp
+
+      - name: Import Developer ID Installer certificate and key
+        script: |
+          echo "$INSTALLER_CERT_CRT" > dev_id_inst.crt
+          echo "$INSTALLER_CERT_KEY" > dev_id_inst.key
+          openssl pkcs12 -export \
+            -inkey dev_id_inst.key \
+            -in dev_id_inst.crt \
+            -out dev_id_inst.p12 \
+            -passout pass:devinst
+          keychain import-certificate dev_id_inst.p12 --password devinst
 
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
