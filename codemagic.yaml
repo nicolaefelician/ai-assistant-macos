@@ -25,7 +25,6 @@ workflows:
       - name: Set up keychain for code signing
         script: |
           keychain initialize
-          keychain list-certificates | jq '.[] | .common_name'
 
       - name: Fetch signing files
         script: |
@@ -40,7 +39,9 @@ workflows:
           app-store-connect certificates create --type MAC_APP_DISTRIBUTION --save
 
       - name: Add certificates to keychain
-        script: keychain add-certificates
+        script: |
+          keychain add-certificates
+          keychain list-certificates | jq '.[] | .common_name'
 
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
