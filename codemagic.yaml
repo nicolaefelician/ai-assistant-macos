@@ -33,10 +33,10 @@ workflows:
             --type MAC_APP_STORE \
             --create || true
 
-      - name: Ensure Mac Installer Distribution certificate is available
-        script: |
-          app-store-connect certificates list --type MAC_INSTALLER_DISTRIBUTION --save || \
-          app-store-connect certificates create --type MAC_INSTALLER_DISTRIBUTION --save
+      # - name: Ensure Mac Installer Distribution certificate is available
+      #   script: |
+      #     app-store-connect certificates list --type MAC_INSTALLER_DISTRIBUTION --save || \
+      #     app-store-connect certificates create --type MAC_INSTALLER_DISTRIBUTION --save
 
       - name: Import Developer ID Application certificate and key
         script: |
