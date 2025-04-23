@@ -11,6 +11,7 @@ workflows:
         BUNDLE_ID: "com.denice.agent.ai"
         XCODE_WORKSPACE: "AiAssistant.xcworkspace"
         XCODE_SCHEME: "AiAssistant"
+        XCODE_PROJECT: "AiAssistant.xcodeproj"
       xcode: latest
       cocoapods: default
 
