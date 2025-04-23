@@ -3,14 +3,16 @@ workflows:
     name: macOS Distribution
     max_build_duration: 60
     instance_type: mac_mini_m2
+
     environment:
       groups:
         - code-signing
       vars:
         BUNDLE_ID: "com.denice.agent.ai"
-        XCODE_SCHEME: "AiAssistant"
         XCODE_PROJECT: "AiAssistant.xcodeproj"
+        XCODE_SCHEME: "AiAssistant"
       xcode: latest
+
     integrations:
       app_store_connect: Denice-CI-CD-Key
 
@@ -18,38 +20,46 @@ workflows:
       - name: Install Codemagic CLI tools
         script: pip3 install codemagic-cli-tools
 
-      - name: Initialize keychain
+      - name: Set up keychain to be used for code signing
         script: keychain initialize
 
-      - name: Decode certificate from base64
-        script: echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
-
-      - name: Import certificate to keychain
+      - name: Fetch signing files
         script: |
-          keychain add-certificates
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --platform MAC_OS \
+            --type MAC_APP_STORE \
+            --create
 
-      - name: Build macOS .app
+      - name: Fetch Mac Installer Distribution certificates
+        script: |
+          app-store-connect certificates list --type MAC_APP_DISTRIBUTION --save || \
+          app-store-connect certificates create --type MAC_APP_DISTRIBUTION --save
+
+      - name: Add certificates to keychain
+        script: keychain add-certificates
+
+      - name: Set up code signing settings
+        script: xcode-project use-profiles
+
+      - name: Build .app for macOS
         script: |
           xcodebuild \
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
-            -derivedDataPath build
+            -derivedDataPath build \
+            clean build
 
       - name: Create signed .pkg installer
         script: |
           set -x
-          APP_NAME=$(find build -name "*.app")
-          cd $(dirname "$APP_NAME")
+          APP_NAME=$(find build -name "*.app" | head -n 1)
           PACKAGE_NAME=$(basename "$APP_NAME" .app).pkg
           xcrun productbuild --component "$APP_NAME" /Applications/ unsigned.pkg
 
-          INSTALLER_CERT_NAME=$(keychain list-certificates \
-            | jq '.[]
-            | select(.common_name
-            | contains("Developer ID Installer")) 
-            | .common_name' \
-            | xargs)
+          INSTALLER_CERT_NAME=$(keychain list-certificates | jq '.[]
+            | select(.common_name | contains("Developer ID Installer")) 
+            | .common_name' | xargs)
 
           xcrun productsign --sign "$INSTALLER_CERT_NAME" unsigned.pkg "$PACKAGE_NAME"
           rm -f unsigned.pkg
@@ -59,17 +69,13 @@ workflows:
           PKG_FILE=$(find . -name "*.pkg")
           xcrun notarytool submit "$PKG_FILE" \
             --apple-id "$APPLE_ID" \
-            --password "$APPLE_ID_PASSWORD" \
             --team-id "$TEAM_ID" \
+            --password "$APPLE_ID_PASSWORD" \
             --wait
 
-      - name: Staple notarization ticket
-        script: |
-          PKG_FILE=$(find . -name "*.pkg")
-          xcrun stapler staple "$PKG_FILE"
-
     artifacts:
-      - build/Build/Products/Release/*.pkg
+      - build/**/*.app
+      - build/**/*.pkg
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
 
     publishing:
