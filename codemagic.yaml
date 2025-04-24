@@ -22,8 +22,9 @@ workflows:
       - name: Install CocoaPods dependencies
         script: pod install
 
-      - name: Set up keychain to be used for code signing using Codemagic CLI 'keychain' command
-        script: keychain initialize
+      - name: Install Codemagic CLI tools
+        script: |
+          pip3 install codemagic-cli-tools
 
       # - name: Fetch signing files
       #   script: |
@@ -37,8 +38,11 @@ workflows:
       #     app-store-connect certificates list --type DEVELOPER_ID_APPLICATION --save || \
       #     app-store-connect certificates create --type DEVELOPER_ID_APPLICATION --save
 
-      - name: Set up signing certificate
-        script: keychain add-certificates
+      - name: Fetch code signing
+        script: |
+          keychain initialize
+          keychain add-certificates
+          xcode-project use-profiles
 
       - name: Install provisioning profile manually
         script: |
