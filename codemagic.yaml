@@ -11,6 +11,7 @@ workflows:
         BUNDLE_ID: "com.denice.agent.ai"
         XCODE_SCHEME: "AiAssistant"
         XCODE_WORKSPACE: "AiAssistant.xcworkspace"
+        MAC_PROVISIONING_PROFILE: "Agent_AI_Profile"
       xcode: latest
       cocoapods: default
 
@@ -39,8 +40,11 @@ workflows:
       - name: Set up signing certificate
         script: keychain add-certificates
 
-      - name: Set up code signing settings on Xcode project
-        script: xcode-project use-profiles
+      - name: Install provisioning profile manually
+        script: |
+          echo "$MAC_PROVISIONING_PROFILE" | base64 --decode > "profile.provisionprofile"
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp profile.provisionprofile ~/Library/MobileDevice/Provisioning\ Profiles/
 
       - name: Build and sign the .app using Xcode
         script: |
