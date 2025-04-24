@@ -1,6 +1,6 @@
 workflows:
-  macos-sign-notarize-app:
-    name: macOS Sign & Notarize .app Only
+  macos-sign-app:
+    name: macOS Sign .app Only
     max_build_duration: 60
     instance_type: mac_mini_m2
 
@@ -31,10 +31,10 @@ workflows:
             --type MAC_APP_STORE \
             --create
 
-      - name: Fetch Mac Installer Distribution certificates
+      - name: Fetch Developer ID Application certificate
         script: |
-          app-store-connect certificates list --type MAC_APP_DISTRIBUTION --save || \
-          app-store-connect certificates create --type MAC_APP_DISTRIBUTION --save
+          app-store-connect certificates list --type DEVELOPER_ID_APPLICATION --save || \
+          app-store-connect certificates create --type DEVELOPER_ID_APPLICATION --save
 
       - name: Set up signing certificate
         script: keychain add-certificates
@@ -42,7 +42,7 @@ workflows:
       - name: Set up code signing settings on Xcode project
         script: xcode-project use-profiles
 
-      - name: Build the .app using Xcode
+      - name: Build and sign the .app using Xcode
         script: |
           xcodebuild \
             -workspace "$XCODE_WORKSPACE" \
@@ -51,8 +51,6 @@ workflows:
             -derivedDataPath build \
             clean build
 
-      - name: Sign and notarize .app bundle
-        script: |
           APP_PATH=$(find build -name "*.app" | head -n 1)
           if [ -z "$APP_PATH" ]; then
             echo "❌ ERROR: .app not found"
@@ -61,23 +59,11 @@ workflows:
 
           echo "✅ Found app: $APP_PATH"
 
-          # Sign the app
           codesign --deep --force --verbose --options runtime \
             --sign "Developer ID Application: Angelle Denice (K9MTJ7767Q)" \
             "$APP_PATH"
 
-          # Compress .app for notarization
           ditto -c -k --keepParent "$APP_PATH" signed_app.zip
-
-          # Submit for notarization
-          xcrun notarytool submit signed_app.zip \
-            --apple-id "$APPLE_ID" \
-            --team-id "$TEAM_ID" \
-            --password "$APPLE_ID_PASSWORD" \
-            --wait \
-            --verbose
-
-          echo "✅ Notarization completed!"
 
     artifacts:
       - build/**/*.app
