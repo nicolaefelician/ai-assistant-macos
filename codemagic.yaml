@@ -38,6 +38,35 @@ workflows:
       #     app-store-connect certificates list --type DEVELOPER_ID_APPLICATION --save || \
       #     app-store-connect certificates create --type DEVELOPER_ID_APPLICATION --save
 
+      - name: Import Developer ID Application certificate from env
+        script: |
+          if [ -z "$CERTIFICATE_PRIVATE_KEY" ]; then
+            echo "❌ ERROR: CERTIFICATE_PRIVATE_KEY is not set"
+            exit 1
+          fi
+
+          if [ -z "$CERTIFICATE_PASSWORD" ]; then
+            echo "❌ ERROR: CERTIFICATE_PASSWORD is not set"
+            exit 1
+          fi
+
+          echo "$CERTIFICATE_PRIVATE_KEY" | base64 --decode > developer_id_app.p12
+
+          if [ ! -f developer_id_app.p12 ]; then
+            echo "❌ ERROR: Failed to create .p12 file"
+            exit 1
+          fi
+
+          security import developer_id_app.p12 \
+            -k "$CM_KEYCHAIN" \
+            -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign || {
+              echo "❌ ERROR: Failed to import certificate into keychain"
+              exit 1
+            }
+
+          security set-key-partition-list -S apple-tool:,apple: -s -k "" "$CM_KEYCHAIN"
+
       - name: Fetch code signing
         script: |
           keychain initialize
