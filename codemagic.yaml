@@ -32,10 +32,10 @@ workflows:
       #       --type DEVELOPER_ID_APPLICATION \
       #       --create
 
-      - name: Fetch Developer ID Application certificate
-        script: |
-          app-store-connect certificates list --type DEVELOPER_ID_APPLICATION --save || \
-          app-store-connect certificates create --type DEVELOPER_ID_APPLICATION --save
+      # - name: Fetch Developer ID Application certificate
+      #   script: |
+      #     app-store-connect certificates list --type DEVELOPER_ID_APPLICATION --save || \
+      #     app-store-connect certificates create --type DEVELOPER_ID_APPLICATION --save
 
       - name: Set up signing certificate
         script: keychain add-certificates
